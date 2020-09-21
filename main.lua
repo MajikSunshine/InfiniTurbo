@@ -1,4 +1,4 @@
--- InfiniTurbo v1.1
+-- InfiniTurbo v1.2
 --
 -- Allow ship to turbo constantly even if the engine drains more than the power cell provides.
 --
@@ -11,7 +11,7 @@
 --   /infiniturbo stacking       Keep ship at exact speed to stack missiles (80m/s)
 --   /infiniturbo speed          Turbo as fast as possible (keeping 25% charge for warp)
 --   /infiniturbo energy         Keep the ship running fast, but slowly charge cell to 100%.
---
+--   /infiniturbo evade          Turbo and build energy to 25% for next jump
 --
 -- Written by igrok
 --
@@ -73,6 +73,41 @@ function infiniturbo.turbooff() gkinterface.GKProcessCommand('+turbo 0') end
 function infiniturbo.turbo()
     -- We can't work if there is currently no ship
     if infiniturbo.running and GetActiveShipID() then
+        if infiniturbo.mode == "evade" then
+            local cellCurrent = GetActiveShipEnergy()
+            if infiniturbo.energyStage == 'init' then
+                -- bring the ship up to speed (use 50% of the power cell)
+                local use = infiniturbo.cellStart * 0.5
+
+                if (infiniturbo.cellStart - cellCurrent) >= use  then
+                    infiniturbo.turbooff()
+                    infiniturbo.energyStage = 'recharge'
+                    infiniturbo.charged = cellCurrent
+                else
+                    infiniturbo.turboon()
+                end
+            elseif infiniturbo.energyStage == 'recharge' then
+                -- recharge the power cell without slowing down too much
+                if cellCurrent >= (infiniturbo.cellFull / 4 ) then
+                    infiniturbo.energyStage = 'maintain'
+                elseif cellCurrent <= (infiniturbo.charged + 2) then
+                    infiniturbo.charged = cellCurrent
+                    infiniturbo.turbooff()
+                elseif cellCurrent >= (infiniturbo.charged + 6) then
+                    infiniturbo.turboon()
+                end
+            else
+                -- try to keep the same velocity and cell charge
+                local use = infiniturbo.cellFull * 0.25
+
+                if cellCurrent <= use then
+                    infiniturbo.turbooff()
+                else
+                    infiniturbo.turboon()
+                end
+            end
+        end
+        
         if infiniturbo.mode == "stacking" then
             local currentSpeed = GetActiveShipSpeed()
 
@@ -168,7 +203,10 @@ function infiniturbo.infiniturbo(data, args)
             infiniturbo.on()
         elseif args[1] == "off" then
             infiniturbo.off()
-
+        elseif args[1] == "evade" then
+            -- set evade mode
+            HUD:PrintSecondaryMsg("\127cd5c00Evade turbo mode.\127o")
+            infiniturbo.mode = "evade"
         elseif args[1] == "stacking" then
             -- set missile stacking mode
             HUD:PrintSecondaryMsg("\127cd5c00Stacking turbo mode.\127o")
